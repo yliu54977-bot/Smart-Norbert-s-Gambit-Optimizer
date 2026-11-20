@@ -162,6 +162,34 @@ One security in detail, including how the result changes with the wait:
 norbert-optimizer compare --amount 10000 --broker td --pair DLR.TO --data prices.csv
 ```
 
+Paper-test one conversion step by step before doing it for real: with
+closing prices from a past date, with live quotes during market hours
+(`--live`), or with prices you type in. After a real conversion, add what you
+actually received to see how far it was from the ticket, and keep a log:
+
+```bash
+norbert-optimizer ticket --amount 10000 --broker questrade --date 2025-12-15 --data prices.csv
+norbert-optimizer ticket --amount 10000 --broker questrade --live --log my_tests.csv
+norbert-optimizer ticket --amount 10000 --broker questrade --cad-price 14.11 --usd-price 10.22 \
+    --fx 0.7254 --actual-usd 7238.50 --log my_tests.csv --label "first real test"
+```
+
+Example (Questrade, 10,000 CAD, bought 15 Dec 2025, sold 18 Dec 2025):
+
+```
+Start with 10,000.00 CAD
+  Journal fee set aside:         -9.95 CAD
+  Buy 708 shares at 14.1070 CAD:  -9,987.79 CAD
+  Buy commission:                -0.00 CAD
+  Leftover 2.26 CAD converted directly: +1.61 USD
+Journal the shares, then
+  Sell 708 shares at 10.2249 USD: +7,239.20 USD
+  Sell commission:               -0.00 USD
+You get 7,240.81 USD (effective rate 0.72408 USD per CAD)
+  Mid-market value:   7,254.01 USD -> cost 13.20 USD
+  Direct conversion:  7,145.20 USD -> Gambit saves 95.61 USD
+```
+
 Without `--broker`, the defaults are a 2% bank spread, 9.95 per trade and a
 4-day wait. Other options: `--per-share`, `--commission-min`,
 `--commission-max`, `--slippage-bps`, `--fx-source`, `--max-gap`,
@@ -173,11 +201,17 @@ Without `--broker`, the defaults are a 2% bank spread, 9.95 per trade and a
 pytest
 ```
 
-34 tests check the formulas against hand calculations (commissions, per-share
+40 tests check the formulas against hand calculations (commissions, per-share
 fees, journal fees, slippage, leftover cash, dividends, the wait), tiered
 broker FX, which securities each broker allows, the 4 pm exchange rate, the
-data checks, the ranking and recommendation rules, the command line, and the
-yfinance download (with a fake yfinance, so tests run offline).
+data checks, the ranking and recommendation rules, the trade ticket (which
+must match the simulator exactly), the command line, and the yfinance
+download and live quotes (with a fake yfinance, so tests run offline).
+
+Paper trading accounts (for example Interactive Brokers') simulate orders but
+not journaling, so they cannot test the whole Gambit. The `ticket` command
+does the arithmetic instead; the final check is a real conversion logged with
+`--actual-usd`.
 
 ## Limitations
 
@@ -199,8 +233,9 @@ src/norbert_optimizer/
     models.py    direct conversion and Gambit simulations
     stats.py     summary statistics and break-even amount
     rank.py      ranking, recommendation, broker comparison
+    ticket.py    one Gambit step by step; live quotes; test log
     plots.py     charts
-    cli.py       command line (brokers, rank, compare)
+    cli.py       command line (brokers, rank, compare, ticket)
 tests/           pytest tests
 scripts/         synthetic sample data generator
 data/            synthetic sample CSV

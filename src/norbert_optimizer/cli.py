@@ -29,6 +29,7 @@ from .plots import save_broker_chart, save_charts, save_ranking_chart
 from .rank import (best_by_amount, broker_assumptions, build_frames, compare_brokers, mean_fx, rank_pairs,
                    recommend, sensitivity)
 from .stats import break_even_amount, format_summary, summarize
+from .ticket import append_log, live_quotes, make_ticket
 from .universe import UNIVERSE, Pair, find_pair
 
 DEFAULT_AMOUNTS = [1_000, 2_500, 5_000, 10_000, 25_000, 50_000, 100_000]
@@ -81,6 +82,20 @@ def build_parser() -> argparse.ArgumentParser:
     b.add_argument("--list", action="store_true", help="Show each broker's fees, rules and sources, then exit")
     b.add_argument("--amounts", default=",".join(str(a) for a in DEFAULT_AMOUNTS),
                    help="Comma-separated amounts for the cost-by-amount table")
+
+    t = sub.add_parser("ticket", help="Paper-test one Gambit step by step, or check a real one")
+    add_data_args(t)
+    add_cost_args(t)
+    t.add_argument("--pair", default="DLR.TO", help="Security to use, e.g. DLR.TO or RY")
+    src = t.add_mutually_exclusive_group(required=True)
+    src.add_argument("--date", help="Use closing prices from this start date (needs --data or --start/--end)")
+    src.add_argument("--live", action="store_true", help="Use live quotes from yfinance (market hours)")
+    src.add_argument("--cad-price", type=float, help="Price you buy the CAD listing at (the ask)")
+    t.add_argument("--usd-price", type=float, help="Price you sell the USD listing at (the bid)")
+    t.add_argument("--fx", type=float, help="Mid-market USD per CAD when you start")
+    t.add_argument("--actual-usd", type=float, help="USD you really received, to compare with the ticket")
+    t.add_argument("--log", help="Append the ticket to this CSV")
+    t.add_argument("--label", default="", help="Note stored with the logged ticket")
 
     c = sub.add_parser("compare", help="Direct conversion vs Norbert's Gambit with one security")
     add_data_args(c)
@@ -306,9 +321,61 @@ def run_compare(args) -> int:
     return 0
 
 
+def run_ticket(args) -> int:
+    pair = find_pair(args.pair)
+    broker = effective_broker(args)
+    if broker and not broker.allows(pair.cad):
+        raise SystemExit(f"{broker.name} does not support Norbert's Gambit with {pair.cad}: {broker.how}")
+    divs = 0.0
+    if args.date:
+        frames = build_frames(get_wide(args, [find_pair("DLR.TO"), pair]), [pair], args.max_gap, args.fx_source)
+        if pair.cad not in frames:
+            raise SystemExit(f"No clean data for {pair.cad}.")
+        df = frames[pair.cad]["df"]
+        start = df.index[df.index >= args.date]
+        if len(start) == 0:
+            raise SystemExit(f"No trading day on or after {args.date} in the data.")
+        i = df.index.get_loc(start[0])
+        fx_mid = float(df["cadusd"].iloc[i])
+        a = (broker_assumptions(broker, args.amount, fx_mid, Assumptions(slippage_bps=args.slippage_bps))
+             if broker else plain_assumptions(args))
+        d = broker.delay_for(pair.cad) if broker else a.delay_days
+        if i + d >= len(df):
+            raise SystemExit("Not enough data after that date for the wait.")
+        slip = args.slippage_bps / 10_000
+        cad_price = float(df["cad_price"].iloc[i]) * (1 + slip)
+        usd_price = float(df["usd_price"].iloc[i + d]) * (1 - slip)
+        divs = float(df["usd_dividend"].iloc[i + 1 : i + d + 1].sum())
+        when = f"bought {df.index[i].date()}, sold {df.index[i + d].date()} ({d}-day wait), closes +/- {args.slippage_bps:g} bps"
+    else:
+        if args.live:
+            q = live_quotes(pair.cad, pair.usd if not pair.derive_usd else "DLR-U.TO")
+            cad_price, usd_price, fx_mid = q["cad_price"], q["usd_price"], q["fx_mid"]
+            when = f"live quotes (ask size {q['ask_size']}, bid size {q['bid_size']})"
+        else:
+            if args.usd_price is None or args.fx is None:
+                raise SystemExit("Give --cad-price, --usd-price and --fx together.")
+            cad_price, usd_price, fx_mid = args.cad_price, args.usd_price, args.fx
+            when = "prices given on the command line"
+        a = (broker_assumptions(broker, args.amount, fx_mid, Assumptions(slippage_bps=args.slippage_bps))
+             if broker else plain_assumptions(args))
+
+    t = make_ticket(args.amount, cad_price, usd_price, fx_mid, a, divs, args.actual_usd)
+    if args.json:
+        print(json.dumps(t.__dict__, indent=2, default=str))
+    else:
+        who = broker.name if broker else "custom costs"
+        print(f"Norbert's Gambit with {pair.cad} -> {pair.usd} at {who}; {when}\n")
+        print("\n".join(t.lines()))
+    if args.log:
+        print(f"\nLogged to {append_log(args.log, t, args.label or (broker.key if broker else ''))}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    return {"rank": run_rank, "brokers": run_brokers, "compare": run_compare}[args.command](args)
+    commands = {"rank": run_rank, "brokers": run_brokers, "compare": run_compare, "ticket": run_ticket}
+    return commands[args.command](args)
 
 
 if __name__ == "__main__":
