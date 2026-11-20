@@ -29,8 +29,8 @@ All of them can be changed from the command line.
 ## Install
 
 ```bash
-git clone https://github.com/<your-username>/norbert-gambit-optimizer.git
-cd norbert-gambit-optimizer
+git clone https://github.com/yliu54977-bot/Smart-Norbert-s-Gambit-Optimizer.git
+cd Smart-Norbert-s-Gambit-Optimizer
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 ```
