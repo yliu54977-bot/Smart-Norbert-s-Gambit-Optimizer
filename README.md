@@ -59,7 +59,7 @@ The true cost is above zero.
 
 ### Live paper test (20 Nov 2026, 11:36 am ET)
 
-Ten paper tickets with live Yahoo quotes (buy DLR.TO at the 14.52 ask, sell
+Paper tickets for each broker with live Yahoo quotes (buy DLR.TO at the 14.52 ask, sell
 DLR-U.TO at the 10.13 bid, CADUSD 0.6985; Yahoo's TSX quotes may be
 delayed). No real orders were placed. Cost on 10,000 CAD, in USD:
 
