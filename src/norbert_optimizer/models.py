@@ -3,6 +3,7 @@
 Bank:   USD = CAD x cadusd x (1 - bank_spread)
 
 Norbert's Gambit, started on day t:
+    0. Set aside the broker's journal fee (CAD), if any.
     1. Pay the buy commission in CAD and buy as many whole shares of the CAD
        listing as the rest allows, at the day-t close plus slippage.
     2. Leftover CAD that cannot buy a whole share goes through the bank.
@@ -32,6 +33,7 @@ class Assumptions:
     commission_max: float = float("inf")  # cap on each trade's fee
     delay_days: int = 4              # trading days to journal the shares
     slippage_bps: float = 5.0        # half bid-ask spread paid on each trade, in basis points
+    journal_fee: float = 0.0         # broker's fee to journal the shares, in CAD, once per Gambit
 
     def __post_init__(self) -> None:
         if not 0 <= self.bank_spread < 1:
@@ -44,6 +46,8 @@ class Assumptions:
             raise ValueError("delay_days cannot be negative.")
         if not 0 <= self.slippage_bps < 1000:
             raise ValueError("slippage_bps must be between 0 and 1000.")
+        if self.journal_fee < 0:
+            raise ValueError("journal_fee cannot be negative.")
 
     def with_(self, **changes) -> "Assumptions":
         return replace(self, **changes)
@@ -99,9 +103,12 @@ def simulate(df: pd.DataFrame, cad_amount: float, a: Assumptions = Assumptions()
     # dividends with ex-date in (t, t+d]: cum[t+d+1] - cum[t+1]
     div_per_share = cum[d + 1 : d + 1 + n] - cum[1 : 1 + n]
 
-    shares = max_affordable_shares(cad_amount, buy_px, a)
+    budget = cad_amount - a.journal_fee
+    if budget <= 0:
+        raise ValueError("cad_amount does not cover the journal fee.")
+    shares = max_affordable_shares(budget, buy_px, a)
     buy_fee = a.trade_fee(shares)
-    leftover_cad = cad_amount - shares * buy_px - buy_fee
+    leftover_cad = budget - shares * buy_px - buy_fee
     if (leftover_cad < -1e-9).any():
         raise ValueError("cad_amount does not cover the buy commission.")
     if (shares == 0).all():
@@ -115,6 +122,7 @@ def simulate(df: pd.DataFrame, cad_amount: float, a: Assumptions = Assumptions()
         {
             "sell_date": df.index[d:],
             "shares": shares.astype(int),
+            "mid_usd": cad_amount * fx,  # at the mid-market rate, no costs
             "bank_usd": bank,
             "gambit_usd": gambit,
             "difference_usd": gambit - bank,

@@ -66,6 +66,33 @@ def align(
     return df
 
 
+def fx_at_tsx_close(wide: pd.DataFrame, window: int = 21, dlr: str = "DLR.TO") -> pd.Series:
+    """CADUSD at the 4 pm TSX close, measured from DLR's own price.
+
+    Yahoo's daily CADUSD=X close is recorded at a different time from the
+    4 pm stock closes. Mixing the two adds fake day-to-day noise (about 0.6%
+    a day in 2021-2025) that looks like waiting risk but is only a timing
+    mismatch. DLR holds US dollars, so its USD value per unit (DLR.TO price x
+    CADUSD) changes only slowly; a rolling median of it gives that value, and
+    dividing by DLR.TO's 4 pm price gives the exchange rate at 4 pm.
+    """
+    d = pd.concat({"dlr": _clean_index(wide[dlr]), "fx": _clean_index(wide[FX_TICKER])}, axis=1).dropna()
+    usd_value = (d["dlr"] * d["fx"]).rolling(window, center=True, min_periods=1).median()
+    return usd_value / d["dlr"]
+
+
+def with_tsx_close_fx(wide: pd.DataFrame) -> pd.DataFrame:
+    """Copy of a wide frame whose CADUSD=X column is the 4 pm rate from DLR.
+    The original Yahoo rate is kept as `CADUSD=X (Yahoo)`."""
+    if "DLR.TO" not in wide.columns:
+        warnings.warn("No DLR.TO prices; keeping Yahoo's CADUSD=X rate.")
+        return wide
+    out = wide.copy()
+    out[f"{FX_TICKER} (Yahoo)"] = wide[FX_TICKER]
+    out[FX_TICKER] = fx_at_tsx_close(wide).reindex(wide.index)
+    return out
+
+
 def derive_usd_price(cad_price: pd.Series, cadusd: pd.Series) -> pd.Series:
     """Estimate the USD listing's price as the CAD price converted at the FX rate.
 

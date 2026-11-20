@@ -50,7 +50,7 @@ def test_pair_frame_derives_missing_usd():
 
 
 def test_ranking_prefers_low_risk_pair():
-    frames = build_frames(make_wide(), [CALM, WILD, DLRX])
+    frames = build_frames(make_wide(), [CALM, WILD, DLRX], fx_source="yahoo")
     table = rank_pairs(frames, 10_000, Assumptions(), with_break_even=False)
     assert set(table["cad_ticker"]) == {"CALM.TO", "WILD.TO", "DLRX.TO"}
     assert table.iloc[-1]["cad_ticker"] == "WILD.TO"  # widest spread of outcomes ranks last
@@ -58,13 +58,13 @@ def test_ranking_prefers_low_risk_pair():
 
 
 def test_recommend_bank_for_tiny_amounts():
-    frames = build_frames(make_wide(), [CALM, DLRX])
+    frames = build_frames(make_wide(), [CALM, DLRX], fx_source="yahoo")
     rec = recommend(rank_pairs(frames, 300, Assumptions(), with_break_even=False))
     assert rec["method"] == "Bank"
 
 
 def test_best_by_amount_switches_from_bank():
-    frames = build_frames(make_wide(), [CALM, DLRX])
+    frames = build_frames(make_wide(), [CALM, DLRX], fx_source="yahoo")
     t = best_by_amount(frames, [300, 50_000], Assumptions())
     assert t.iloc[0]["recommended"] == "Bank"
     assert t.iloc[1]["recommended"].startswith("Norbert's Gambit")
@@ -75,7 +75,7 @@ def test_cli_rank_with_data_file(tmp_path, monkeypatch, capsys):
     path = tmp_path / "u.csv"
     wide.to_csv(path)
     monkeypatch.setattr("norbert_optimizer.cli.UNIVERSE", [CALM, WILD, DLRX])
-    assert main(["rank", "--amount", "10000", "--data", str(path), "--out", str(tmp_path / "o"),
+    assert main(["rank", "--amount", "10000", "--data", str(path), "--out", str(tmp_path / "o"), "--fx-source", "yahoo",
                  "--amounts", "1000,10000"]) == 0
     out = capsys.readouterr().out
     assert "Recommended:" in out

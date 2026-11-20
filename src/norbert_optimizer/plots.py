@@ -67,3 +67,28 @@ def save_ranking_chart(table: pd.DataFrame, cad_amount: float, out_path: str | P
     fig.savefig(out, dpi=150)
     plt.close(fig)
     return out
+
+
+def save_broker_chart(table: pd.DataFrame, cad_amount: float, out_path: str | Path) -> Path:
+    """Cost of each broker's recommended method: bar = average, line = up to the
+    95th percentile (the bad case)."""
+    t = table.iloc[::-1]
+    y = list(range(len(t)))
+    fig, ax = plt.subplots(figsize=(9, 0.5 * len(t) + 1.6))
+    ax.barh(y, t["mean_cost_usd"], color="tab:blue", alpha=0.8, label="Average cost")
+    ax.hlines(y, t["mean_cost_usd"], t["p95_cost_usd"], color="black", linewidth=1.5, label="Up to bad case (95th pct)")
+    for yi, (p95, label) in enumerate(zip(t["p95_cost_usd"], t["recommended"])):
+        ax.text(p95 + t["p95_cost_usd"].max() * 0.02, yi, label, va="center", fontsize=8)
+    ax.set_yticks(y)
+    ax.set_yticklabels(t["broker"])
+    ax.set_xlabel("USD lost vs the mid-market rate (lower is better)")
+    ax.set_title(f"Cost to convert {cad_amount:,.0f} CAD to USD, cheapest method at each broker")
+    ax.set_xlim(0, t["p95_cost_usd"].max() * 1.6)
+    ax.grid(axis="x", alpha=0.3)
+    ax.legend(loc="upper right")
+    fig.tight_layout()
+    out = Path(out_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out, dpi=150)
+    plt.close(fig)
+    return out

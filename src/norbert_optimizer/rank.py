@@ -18,16 +18,25 @@ import warnings
 import numpy as np
 import pandas as pd
 
-from .data import clean_pair, pair_frame
+from .data import clean_pair, pair_frame, with_tsx_close_fx
 from .models import Assumptions, simulate
 from .stats import break_even_amount, summarize
+from .brokers import Broker
 from .universe import Pair
 
 MIN_DAYS = 250  # need about a year of data for a pair to be ranked
 
 
-def build_frames(wide: pd.DataFrame, pairs: list[Pair], max_gap: float = 0.03) -> dict[str, dict]:
-    """Pair frames for every pair that has enough clean data."""
+def build_frames(
+    wide: pd.DataFrame, pairs: list[Pair], max_gap: float = 0.03, fx_source: str = "dlr"
+) -> dict[str, dict]:
+    """Pair frames for every pair that has enough clean data.
+
+    fx_source "dlr" (default) uses the 4 pm exchange rate measured from DLR
+    (see data.fx_at_tsx_close); "yahoo" uses Yahoo's CADUSD=X close as is.
+    """
+    if fx_source == "dlr":
+        wide = with_tsx_close_fx(wide)
     frames = {}
     for p in pairs:
         try:
@@ -48,15 +57,27 @@ def rank_pairs(
     cad_amount: float,
     a: Assumptions = Assumptions(),
     with_break_even: bool = True,
+    broker: Broker | None = None,
 ) -> pd.DataFrame:
-    """One row per pair, best (highest 5th-percentile savings) first."""
+    """One row per pair, best (highest 5th-percentile savings) first.
+
+    With a broker, only the pairs it allows are tested, each with the broker's
+    waiting time for that kind of security (e.g. RBC lets you sell DLR.U at once).
+    """
     rows = []
     for item in frames.values():
         p, df = item["pair"], item["df"]
+        pa = a
+        if broker is not None:
+            if not broker.allows(p.cad):
+                continue
+            pa = a.with_(delay_days=broker.delay_for(p.cad))
         try:
-            s = summarize(simulate(df, cad_amount, a), cad_amount)
+            result = simulate(df, cad_amount, pa)
         except ValueError:
             continue  # amount too small to buy one share of this security
+        s = summarize(result, cad_amount)
+        cost = result["mid_usd"] - result["gambit_usd"]
         rows.append(
             {
                 "name": p.name,
@@ -72,7 +93,10 @@ def rank_pairs(
                 "worst_savings_usd": s["worst_savings_usd"],
                 "win_rate": s["gambit_win_rate"],
                 "mean_savings_pct": s["mean_savings_pct"],
-                "break_even_cad": break_even_amount(df, simulate, a) if with_break_even else np.nan,
+                "mean_cost_usd": float(cost.mean()),
+                "p95_cost_usd": float(np.percentile(cost, 95)),
+                "delay_days": pa.delay_days,
+                "break_even_cad": break_even_amount(df, simulate, pa) if with_break_even else np.nan,
                 "usd_price_derived": item["derived"],
                 "days_flagged": item["dropped"],
             }
@@ -113,16 +137,22 @@ def recommend(table: pd.DataFrame) -> dict:
     }
 
 
-def best_by_amount(frames: dict[str, dict], amounts: list[float], a: Assumptions = Assumptions()) -> pd.DataFrame:
+def best_by_amount(
+    frames: dict[str, dict], amounts: list[float], a: Assumptions = Assumptions(), broker: Broker | None = None
+) -> pd.DataFrame:
     """For each amount, the recommended method and how it compares with the bank."""
     rows = []
     for amt in amounts:
-        table = rank_pairs(frames, amt, a, with_break_even=False)
+        aa = a if broker is None else a.with_(bank_spread=broker.fx_spread(amt, mean_fx(frames)))
+        table = rank_pairs(frames, amt, aa, with_break_even=False, broker=broker)
         rec = recommend(table)
+        method = rec["method"]
+        if broker is not None and method == "Bank":
+            method = "Convert directly"
         rows.append(
             {
                 "cad_amount": amt,
-                "recommended": rec["method"],
+                "recommended": method,
                 "mean_savings_usd": rec.get("mean_savings_usd", 0.0),
                 "p5_savings_usd": rec.get("p5_savings_usd", 0.0),
                 "win_rate": rec.get("win_rate", np.nan),
@@ -139,3 +169,70 @@ def sensitivity(df: pd.DataFrame, cad_amount: float, a: Assumptions, field: str,
         rows.append({field: v, "mean_savings_usd": s["mean_savings_usd"],
                      "p5_savings_usd": s["p5_savings_usd"], "win_rate": s["gambit_win_rate"]})
     return pd.DataFrame(rows)
+
+
+def mean_fx(frames: dict[str, dict]) -> float:
+    """Average CADUSD over the data, used to place an amount in a broker's FX tier."""
+    for item in frames.values():
+        return float(item["df"]["cadusd"].mean())
+    return 0.73
+
+
+def broker_assumptions(broker: Broker, cad_amount: float, fx: float, base: Assumptions = Assumptions()) -> Assumptions:
+    """The base assumptions with this broker's fees, conversion spread and journal fee."""
+    return base.with_(
+        bank_spread=broker.fx_spread(cad_amount, fx),
+        commission=broker.commission,
+        per_share=broker.per_share,
+        commission_min=broker.commission_min,
+        commission_max=broker.commission_max,
+        journal_fee=broker.journal_fee,
+    )
+
+
+def compare_brokers(
+    frames: dict[str, dict], brokers: list[Broker], cad_amount: float, base: Assumptions = Assumptions()
+) -> pd.DataFrame:
+    """Cost of the safest worthwhile method at each broker, lowest average cost first.
+
+    Costs are in USD against the mid-market rate: how many fewer US dollars you
+    get than a perfect, free conversion would give. `p95_cost_usd` is the bad
+    case: in 95% of start dates the cost was at most this much.
+    """
+    fx = mean_fx(frames)
+    rows = []
+    for b in brokers:
+        a = broker_assumptions(b, cad_amount, fx, base)
+        direct_cost = cad_amount * fx * a.bank_spread
+        row = {
+            "broker": b.name,
+            "key": b.key,
+            "direct_fx_spread": a.bank_spread,
+            "direct_cost_usd": direct_cost,
+            "gambit_pair": "",
+            "gambit_mean_cost_usd": np.nan,
+            "gambit_p95_cost_usd": np.nan,
+            "recommended": "Convert directly",
+            "mean_cost_usd": direct_cost,
+            "p95_cost_usd": direct_cost,
+            "fx_tiers_complete": b.fx_tiers_complete,
+            "source_quality": b.source_quality,
+        }
+        if b.gambit != "not_needed":
+            table = rank_pairs(frames, cad_amount, a, with_break_even=False, broker=b)
+            if not table.empty:
+                best = table.iloc[0]
+                row.update(
+                    gambit_pair=f"{best['cad_ticker']} -> {best['usd_ticker']}",
+                    gambit_mean_cost_usd=best["mean_cost_usd"],
+                    gambit_p95_cost_usd=best["p95_cost_usd"],
+                )
+                if best["p5_savings_usd"] > 0:  # beat direct conversion in 95% of start dates
+                    row.update(
+                        recommended=f"Norbert's Gambit ({best['cad_ticker']})",
+                        mean_cost_usd=best["mean_cost_usd"],
+                        p95_cost_usd=best["p95_cost_usd"],
+                    )
+        rows.append(row)
+    out = pd.DataFrame(rows)
+    return out.sort_values(["mean_cost_usd", "p95_cost_usd"]).reset_index(drop=True)

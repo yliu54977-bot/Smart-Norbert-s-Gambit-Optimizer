@@ -1,117 +1,130 @@
 # Norbert's Gambit Optimizer
 
-What is the cheapest way to turn Canadian dollars into US dollars? This tool
-backtests the bank against **Norbert's Gambit** with 44 different securities
-(DLR plus 43 Canadian companies that also trade in New York), on every
-possible start date, and recommends the method to use for the amount you want
-to convert.
+What is the cheapest way to turn Canadian dollars into US dollars, at your
+broker? This tool backtests your broker's own conversion against **Norbert's
+Gambit** with 44 securities (DLR plus 43 Canadian companies that also trade
+in New York), on every start date from 2021 to 2025, using each broker's real
+fees and rules: commissions, journal fees, tiered FX spreads, which
+securities it lets you journal, and how long you wait.
 
-## The answer (Jan 2021 to Dec 2025, real Yahoo Finance prices)
+## The answer (2021 to 2025, real Yahoo Finance prices; fees checked 2026-11-20)
 
-With default costs (2% bank spread, 9.95 commission per trade, 0.05% bid-ask
-cost per trade, 4 trading days to journal the shares):
+![Cost at each broker](docs/brokers.png)
 
-- **Use DLR.TO → DLR-U.TO.** It ranked first out of 44. On 10,000 CAD it saved
-  126 USD on average and beat the bank on 99.5% of 1,249 start dates.
-- **The security choice doesn't raise your average saving, only your risk.**
-  Every security saved roughly the same on average (119 to 228 USD on
-  10,000 CAD), because the saving comes from skipping the bank's spread.
-  What differs is how much the price moves while you wait for the journal:
-  DLR tracks the US dollar, so it barely moves; stocks can swing several
-  percent. With BlackBerry, the worst start date lost 4,069 USD compared with
-  the bank.
-- **Below about 1,200 CAD, use the bank.** The two commissions cost more than
-  the spread you save. With commission-free trading, the Gambit wins at any
-  amount.
-- **If your broker lets you sell the USD side right away**, before the journal
-  settles, the waiting risk disappears: DLR's 5th-percentile saving on
-  10,000 CAD rises from 55 to 116 USD.
+Cost of converting **10,000 CAD**, in USD lost compared with the mid-market
+rate (lower is better):
+
+| Broker | Cheapest safe method | Avg cost (USD) | Bad case, 95th pct (USD) | Direct conversion (USD) |
+| --- | --- | ---: | ---: | ---: |
+| Interactive Brokers | Convert directly | 2.00 | 2.00 | 2.00 |
+| Questrade (with Questrade Plus) | Norbert's Gambit (DLR) | 7.32 | 16.79 | 112.63 |
+| BMO InvestorLine | Norbert's Gambit (DLR) | 7.32 | 16.80 | 120.14 |
+| Wealthsimple | Norbert's Gambit (DLR) | 14.75 | 24.20 | 75.09 |
+| Questrade | Norbert's Gambit (DLR) | 14.78 | 24.24 | 112.63 |
+| National Bank Direct Brokerage | Norbert's Gambit (DLR) | 14.79 | 24.25 | 127.65 |
+| CIBC Investor's Edge | Norbert's Gambit (DLR) | 19.49 | 28.84 | 120.14 |
+| TD Direct Investing | Norbert's Gambit (DLR) | 24.79 | 34.24 | 94.61 |
+| RBC Direct Investing | Norbert's Gambit (DLR) | 24.99 | 26.07 | 120.14 |
+
+- **At every broker that supports it, the Gambit beats the broker's own
+  conversion**, saving about 60 to 113 USD on 10,000 CAD.
+- **Use DLR, not a stock.** DLR was the best security at every broker. Stocks
+  save about the same on average, but their price moves while the shares are
+  journaled; with Shopify the worst start date lost 2,290 USD against a bank.
+- **Interactive Brokers doesn't need the Gambit**: its direct conversion
+  costs 0.002% with a US$2 minimum.
+- **Commission-free brokers with no journal fee are cheapest for the Gambit**
+  (BMO InvestorLine, Questrade Plus). A 9.95 CAD journal fee adds about 7 USD.
+- **RBC lets you sell DLR.U right away**, so there is no waiting at all: its
+  cost barely varies (25.0 USD on average, 26.1 in the bad case). It costs
+  more only because of its 9.95 commissions.
+
+Average cost (USD) of each broker's recommended method by amount (CAD):
+
+| Broker | 1,000 | 2,500 | 5,000 | 10,000 | 25,000 | 50,000 | 100,000 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Interactive Brokers | 2.00 | 2.00 | 2.00 | 2.00 | 2.00 | 2.00 | 2.00 |
+| Questrade (with Questrade Plus) | 0.80 | 1.88 | 3.70 | 7.32 | 18 | 36 | 73 |
+| BMO InvestorLine | 0.80 | 1.89 | 3.70 | 7.32 | 18 | 36 | 73 |
+| Wealthsimple | 8.26 | 9.35 | 11 | 15 | 26 | 44 | 0.00* |
+| Questrade | 8.26 | 9.35 | 11 | 15 | 26 | 44 | 80 |
+| National Bank Direct Brokerage | 8.27 | 9.36 | 11 | 15 | 26 | 44 | 80 |
+| CIBC Investor's Edge | 12 | 14 | 16 | 19 | 30 | 48 | 85 |
+| TD Direct Investing | 9.46 | 19 | 21 | 25 | 36 | 54 | 90 |
+| RBC Direct Investing | 12 | 19 | 21 | 25 | 36 | 55 | 93 |
+
+\*Wealthsimple charges no FX fee from 100,000 CAD, but the fee sits on top of
+its own exchange rate, which already includes a spread that is not published.
+The true cost is above zero.
+
+Before you convert, check your broker's current rules:
+`norbert-optimizer brokers --list` prints each broker's fees, how to request
+the journal, notes, and the pages the numbers came from.
+
+## Every security, ranked (10,000 CAD vs a bank's 2% spread)
 
 ![Ranking of the top 15 securities](docs/ranking.png)
 
-### Top 10 on 10,000 CAD, ranked by 5th-percentile saving
+| Rank | Security | Avg saving (USD) | 5th pct (USD) | Worst (USD) | Beat bank |
+| ---: | --- | ---: | ---: | ---: | ---: |
+| 1 | DLR.TO → DLR-U.TO (Global X US Dollar Currency ETF) | 126 | 112 | 33 | 100.0% |
+| 2 | FTS.TO → FTS (Fortis) | 135 | -116 | -520 | 81.4% |
+| 3 | WCN.TO → WCN (Waste Connections) | 139 | -133 | -628 | 80.8% |
+| 4 | RY.TO → RY (Royal Bank of Canada) | 146 | -143 | -657 | 82.1% |
+| 5 | TRP.TO → TRP (TC Energy) | 144 | -148 | -515 | 77.7% |
+| 6 | ENB.TO → ENB (Enbridge) | 142 | -164 | -655 | 81.4% |
+| 7 | BCE.TO → BCE (BCE) | 119 | -171 | -786 | 78.7% |
+| 8 | TRI.TO → TRI (Thomson Reuters) | 139 | -173 | -786 | 79.7% |
+| 44 | SHOP.TO → SHOP (Shopify) | 150 | -799 | -2,290 | 60.6% |
 
-The 5th percentile is the "bad case": in 95% of start dates you did at least
-this well.
+Every security saved 119 to 228 USD on average; DLR is the only one that
+never lost to the bank in 1,249 start dates. Ranking is by the 5th
+percentile: in 95% of start dates you did at least this well.
 
-| Rank | Security | Avg saving (USD) | 5th pct (USD) | Worst (USD) | Beat bank | Break-even (CAD) |
-| ---: | --- | ---: | ---: | ---: | ---: | ---: |
-| 1 | DLR.TO → DLR-U.TO (Global X US Dollar Currency ETF) | 126 | 55 | -60 | 99.5% | 1,224 |
-| 2 | FTS.TO → FTS (Fortis) | 135 | -125 | -534 | 81.4% | 1,165 |
-| 3 | WCN.TO → WCN (Waste Connections) | 139 | -139 | -669 | 80.2% | 1,208 |
-| 4 | RY.TO → RY (Royal Bank of Canada) | 146 | -139 | -575 | 82.1% | 1,134 |
-| 5 | TRP.TO → TRP (TC Energy) | 144 | -162 | -515 | 77.1% | 1,091 |
-| 6 | ENB.TO → ENB (Enbridge) | 142 | -170 | -694 | 80.8% | 1,121 |
-| 7 | TRI.TO → TRI (Thomson Reuters) | 139 | -171 | -780 | 79.1% | 1,189 |
-| 8 | BCE.TO → BCE (BCE) | 119 | -174 | -788 | 78.0% | 1,298 |
-| 9 | T.TO → TU (TELUS) | 121 | -180 | -701 | 77.8% | 1,268 |
-| 10 | GIB-A.TO → GIB (CGI) | 128 | -184 | -681 | 77.2% | 1,249 |
-| 44 | BB.TO → BB (BlackBerry) | 139 | -819 | -4,069 | 58.7% | 1,117 |
+## How the comparison works
 
-The full table for all 44 is written to `output/ranking.csv`.
-
-### Best method by amount
-
-| Amount (CAD) | Recommended | Avg saving (USD) | 5th pct (USD) |
-| ---: | --- | ---: | ---: |
-| 1,000 | Bank | 0 | 0 |
-| 2,500 | Gambit with DLR | 18 | 1 |
-| 5,000 | Gambit with DLR | 54 | 19 |
-| 10,000 | Gambit with DLR | 126 | 55 |
-| 25,000 | Gambit with DLR | 340 | 162 |
-| 50,000 | Gambit with DLR | 698 | 340 |
-| 100,000 | Gambit with DLR | 1,414 | 698 |
-
-The Gambit is recommended only when the best security beat the bank in at
-least 95% of start dates; otherwise the bank is the safer choice.
-
-### Other scenarios (10,000 CAD, DLR)
-
-| Scenario | Avg saving (USD) | 5th pct (USD) | Break-even (CAD) |
-| --- | ---: | ---: | ---: |
-| Default | 126 | 55 | 1,224 |
-| Sell the USD side immediately (`--delay 0`) | 125 | 116 | 1,228 |
-| Bank spread 1.5% instead of 2% (`--spread 0.015`) | 88 | 17 | 1,657 |
-| No commissions (`--commission 0`) | 143 | 71 | 100 or less |
-| Triple the bid-ask cost (`--slippage-bps 15`) | 111 | 40 | 1,365 |
-
-DLR ranked first in every scenario.
-
-## How Norbert's Gambit works
-
-1. Buy a security listed in both currencies with CAD (DLR.TO, or a company
-   such as RY.TO).
-2. Ask your broker to journal the shares to the USD listing (DLR-U.TO, or RY
-   on the NYSE).
-3. Sell the shares for USD.
-
-You skip the bank's FX spread but pay two commissions and a bid-ask cost, and
-the price can move while the journal settles.
-
-## Model
+For each start date, with the broker's settings:
 
 | Method | USD received |
 | --- | --- |
-| Bank | CAD × CADUSD × (1 − spread) |
-| Norbert's Gambit | whole shares bought on day *t* at the CAD close plus slippage; dividends with an ex-date during the wait; sold on day *t + delay* at the USD close minus slippage; minus both commissions; leftover CAD goes through the bank |
+| Direct conversion | CAD × CADUSD × (1 − broker's FX spread for that amount) |
+| Norbert's Gambit | journal fee set aside; whole shares bought at the CAD close plus slippage; dividends during the wait; sold *delay* trading days later at the USD close minus slippage; minus both commissions; leftover CAD converted directly |
 
-Commissions can be flat (`--commission 9.95`) or per share with a minimum and
-maximum (`--commission 0 --per-share 0.01 --commission-min 4.95
---commission-max 9.95`).
+Costs are measured against the mid-market rate. Norbert's Gambit is
+recommended only with a security that beat direct conversion in at least 95%
+of start dates; among those, the one with the best 5th percentile.
 
 ## Data checks
 
+- **Exchange rate at 4 pm.** Yahoo's daily CADUSD=X close is recorded at a
+  different time from the 4 pm stock closes. Mixing them made DLR's USD value
+  appear to jump 0.57% a day, although DLR simply holds US dollars (its USD
+  value moved only from 9.93 to 10.35 over five years). The tool measures the
+  4 pm rate from DLR's own price instead (`--fx-source dlr`, the default).
+  This cut the gap between RY.TO and RY from 0.40% to 0.15% a day.
 - **DLR-U.TO has no history on Yahoo Finance**, so its price is estimated as
-  DLR.TO × CADUSD (both are units of the same fund). Checked against 276
-  five-minute quotes from 16 to 19 Nov 2026: the real DLR-U.TO price was within
-  ±0.1% of the estimate 90% of the time (median gap 0.00%), about ±7 USD on
-  10,000 CAD.
-- **One-sided adjustments are caught.** Both listings are the same share, so
-  USD price ÷ (CAD price × CADUSD) should be close to 1. Days off by more than
-  3% are flagged, and any start date whose holding window touches one is
-  skipped. This caught TC Energy's October 2024 South Bow spin-off: Yahoo
-  adjusted TRP.TO's history by about 10% but not TRP's, which made TRP look like
-  it saved 878 USD per 10,000 CAD before the fix.
+  DLR.TO × CADUSD. Checked against 276 five-minute quotes from 16 to 19 Nov
+  2026: the real price was within ±0.1% of the estimate 90% of the time.
+- **One-sided adjustments are caught.** Days where USD price ÷ (CAD price ×
+  CADUSD) is more than 3% from 1 are flagged, and start dates whose holding
+  window touches one are skipped. This caught TC Energy's October 2024 South
+  Bow spin-off, which Yahoo adjusted on TRP.TO but not on TRP.
+
+## Broker data
+
+Fees and rules are in `src/norbert_optimizer/brokers.py`, each with its
+sources and a check date (2026-11-20). Where a broker does not publish a
+number, it came from a recent third-party fee comparison and the broker is
+marked `sources: mixed`. Known gaps:
+
+- RBC, BMO, CIBC and National Bank: only the first FX tier (under $25,000) is
+  known, so their direct conversion is overstated for larger amounts.
+- TD's FX page mentions an extra affiliate surcharge, so TD's real direct
+  cost may be higher than shown.
+- Waiting times are 3 trading days unless the broker documents otherwise.
+
+Every number can be overridden: `--commission`, `--journal-fee`, `--spread`,
+`--delay`.
 
 ## Install
 
@@ -124,37 +137,35 @@ pip install -e ".[dev]"
 
 ## Usage
 
-Rank every security and get a recommendation (downloads prices with yfinance):
+Download prices once, then reuse them:
 
 ```bash
-norbert-optimizer rank --amount 10000 --start 2021-01-01 --end 2025-12-31 --save-data prices.csv
+norbert-optimizer brokers --amount 10000 --start 2021-01-01 --end 2025-12-31 --save-data prices.csv
 ```
 
-Re-run from the saved prices without downloading:
+Compare brokers, or see their rules and sources:
 
 ```bash
-norbert-optimizer rank --amount 10000 --data prices.csv --delay 0 --commission 0
+norbert-optimizer brokers --amount 25000 --data prices.csv
+norbert-optimizer brokers --list
 ```
 
-Look at one security in detail, including how the result changes with the
-journal delay:
+Best method at your broker, for every security and amount:
 
 ```bash
-norbert-optimizer compare --amount 10000 --pair RY --data prices.csv
+norbert-optimizer rank --amount 10000 --broker questrade --data prices.csv
 ```
 
-Offline demo with made-up prices:
+One security in detail, including how the result changes with the wait:
 
 ```bash
-norbert-optimizer compare --amount 10000 --csv data/sample_synthetic.csv
+norbert-optimizer compare --amount 10000 --broker td --pair DLR.TO --data prices.csv
 ```
 
-Main options: `--spread`, `--commission`, `--per-share`, `--commission-min`,
-`--commission-max`, `--delay`, `--slippage-bps`, `--max-gap`, `--amounts`,
-`--top`, `--out`, `--json`.
-
-`rank` writes `ranking.csv`, `best_by_amount.csv` and `ranking.png`; `compare`
-writes two charts (USD by start date, distribution of savings).
+Without `--broker`, the defaults are a 2% bank spread, 9.95 per trade and a
+4-day wait. Other options: `--per-share`, `--commission-min`,
+`--commission-max`, `--slippage-bps`, `--fx-source`, `--max-gap`,
+`--amounts`, `--top`, `--out`, `--json`.
 
 ## Tests
 
@@ -162,32 +173,34 @@ writes two charts (USD by start date, distribution of savings).
 pytest
 ```
 
-25 tests check the formulas against hand calculations (commissions, per-share
-fees, slippage, leftover cash, dividends, the settlement delay), the data
-checks, the ranking and recommendation rules, the command line, and the
+34 tests check the formulas against hand calculations (commissions, per-share
+fees, journal fees, slippage, leftover cash, dividends, the wait), tiered
+broker FX, which securities each broker allows, the 4 pm exchange rate, the
+data checks, the ranking and recommendation rules, the command line, and the
 yfinance download (with a fake yfinance, so tests run offline).
 
 ## Limitations
 
-- Daily closing prices, not intraday quotes. The CADUSD close is recorded at a
-  different time from the 4 pm stock close, which adds some noise.
+- Daily closing prices, not intraday quotes.
 - Taxes are ignored (a price change during the wait can be a capital gain or
   loss).
-- The journal is assumed to take exactly `--delay` trading days.
-- Not every broker journals every interlisted stock; check with yours.
+- Broker fees and rules change; they were checked on 2026-11-20.
+- Monthly costs such as Questrade Plus or Wealthsimple's USD account are not
+  included in the per-conversion cost.
 - Past results do not guarantee future savings. This is not financial advice.
 
 ## Project layout
 
 ```
 src/norbert_optimizer/
+    brokers.py   broker fees, rules and sources
     universe.py  the 44 securities tested
-    data.py      download, load, check and align prices
-    models.py    bank and Gambit simulations
+    data.py      download, load, check and align prices; 4 pm exchange rate
+    models.py    direct conversion and Gambit simulations
     stats.py     summary statistics and break-even amount
-    rank.py      ranking, recommendation, best method by amount
+    rank.py      ranking, recommendation, broker comparison
     plots.py     charts
-    cli.py       command line (rank, compare)
+    cli.py       command line (brokers, rank, compare)
 tests/           pytest tests
 scripts/         synthetic sample data generator
 data/            synthetic sample CSV
