@@ -57,6 +57,28 @@ Average cost (USD) of each broker's recommended method by amount (CAD):
 its own exchange rate, which already includes a spread that is not published.
 The true cost is above zero.
 
+### Live paper test (20 Nov 2026, 11:36 am ET)
+
+Ten paper tickets with live Yahoo quotes (buy DLR.TO at the 14.52 ask, sell
+DLR-U.TO at the 10.13 bid, CADUSD 0.6985; Yahoo's TSX quotes may be
+delayed). No real orders were placed. Cost on 10,000 CAD, in USD:
+
+| Broker | Backtest average | Live ticket | Difference |
+| --- | ---: | ---: | ---: |
+| BMO InvestorLine | 7.32 | 8.52 | +1.20 |
+| Questrade (with Plus) | 7.32 | 8.51 | +1.19 |
+| Questrade | 14.78 | 15.36 | +0.58 |
+| Wealthsimple | 14.75 | 15.36 | +0.61 |
+| National Bank Direct Brokerage | 14.79 | 15.36 | +0.57 |
+| CIBC Investor's Edge | 19.49 | 20.25 | +0.76 |
+| TD Direct Investing | 24.79 | 25.38 | +0.59 |
+| RBC Direct Investing | 24.99 | 25.31 | +0.32 |
+
+The live costs were within 1.20 USD of the backtest, so the model's 0.05%
+bid-ask assumption matched the market that morning. The ticket sells DLR.U
+at that morning's bid; at brokers with a wait, the real sale happens a few
+days later at a price that is usually within a cent of it.
+
 Before you convert, check your broker's current rules:
 `norbert-optimizer brokers --list` prints each broker's fees, how to request
 the journal, notes, and the pages the numbers came from.
