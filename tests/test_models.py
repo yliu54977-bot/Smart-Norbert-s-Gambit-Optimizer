@@ -87,6 +87,14 @@ def test_align_drops_missing_days():
     assert len(df) == 4
 
 
+def test_derive_usd_price():
+    from norbert_optimizer.data import derive_usd_price
+
+    idx = pd.bdate_range("2025-01-01", periods=3)
+    usd = derive_usd_price(pd.Series([14.0, 14.2, 14.1], index=idx), pd.Series([0.7, 0.7, 0.71], index=idx))
+    assert list(usd.round(4)) == [9.8, 9.94, 10.011]
+
+
 def test_load_csv(tmp_path):
     p = tmp_path / "d.csv"
     p.write_text("date,cad_price,usd_price,cadusd\n2025-01-02,10,7.5,0.75\n2025-01-03,10,7.5,0.75\n")

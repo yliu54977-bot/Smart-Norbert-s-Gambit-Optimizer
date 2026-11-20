@@ -25,6 +25,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--end", help="End date for yfinance, YYYY-MM-DD")
     p.add_argument("--cad-ticker", default="DLR.TO")
     p.add_argument("--usd-ticker", default="DLR-U.TO")
+    p.add_argument(
+        "--derive-usd",
+        action="store_true",
+        help="Use CAD price x CADUSD as the USD listing's price (automatic if it has no data)",
+    )
     p.add_argument("--spread", type=float, default=0.02, help="Bank spread, 0.02 = 2%%")
     p.add_argument("--commission-cad", type=float, default=9.95)
     p.add_argument("--commission-usd", type=float, default=9.95)
@@ -42,7 +47,14 @@ def main(argv: list[str] | None = None) -> int:
     else:
         if not (args.start and args.end):
             raise SystemExit("Give --start and --end for yfinance, or use --csv.")
-        df = load_yfinance(args.cad_ticker, args.usd_ticker, args.start, args.end)
+        df, derived = load_yfinance(
+            args.cad_ticker, args.usd_ticker, args.start, args.end, derive_usd=args.derive_usd
+        )
+        if derived:
+            print(
+                f"Note: not enough history for {args.usd_ticker}; using "
+                f"{args.cad_ticker} price x CADUSD as its USD price."
+            )
 
     a = Assumptions(args.spread, args.commission_cad, args.commission_usd, args.delay)
     result = simulate(df, args.amount, a)
