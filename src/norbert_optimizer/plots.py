@@ -42,3 +42,28 @@ def save_charts(result: pd.DataFrame, out_dir: str | Path) -> list[Path]:
     plt.close(fig)
 
     return paths
+
+
+def save_ranking_chart(table: pd.DataFrame, cad_amount: float, out_path: str | Path, top: int = 15) -> Path:
+    """Horizontal chart of the top pairs: dot = average savings, line = 5th to
+    95th percentile across start dates."""
+    t = table.head(top).iloc[::-1]
+    labels = [f"{c} → {u}" for c, u in zip(t["cad_ticker"], t["usd_ticker"])]
+    y = range(len(t))
+    fig, ax = plt.subplots(figsize=(9, 0.42 * len(t) + 1.6))
+    ax.hlines(y, t["p5_savings_usd"], t["p95_savings_usd"], color="tab:blue", alpha=0.45, linewidth=4,
+              label="5th to 95th percentile")
+    ax.plot(t["mean_savings_usd"], y, "o", color="tab:blue", label="Average")
+    ax.axvline(0, color="black", linewidth=1)
+    ax.set_yticks(list(y))
+    ax.set_yticklabels(labels)
+    ax.set_xlabel("USD saved vs bank (negative = bank was better)")
+    ax.set_title(f"Norbert's Gambit savings on {cad_amount:,.0f} CAD, ranked by 5th percentile")
+    ax.grid(axis="x", alpha=0.3)
+    ax.legend(loc="lower right")
+    fig.tight_layout()
+    out = Path(out_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out, dpi=150)
+    plt.close(fig)
+    return out
